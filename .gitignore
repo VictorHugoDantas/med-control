@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ambiente Virtual
+.venv/
+venv/
+env/
+
+# Configurações de IDE
+.vscode/
+.idea/
+
+# Arquivo de dados local (gerado na execução)
+medicamentos.json
