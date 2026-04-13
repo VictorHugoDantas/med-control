@@ -4,7 +4,6 @@ import os
 FILE_PATH = "medicamentos.json"
 
 def carregar_medicamentos():
-    """Carrega a lista de medicamentos do arquivo JSON."""
     if not os.path.exists(FILE_PATH):
         return []
     try:
@@ -14,7 +13,6 @@ def carregar_medicamentos():
         return []
 
 def salvar_medicamentos(medicamentos):
-    """Salva a lista de medicamentos no arquivo JSON."""
     with open(FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(medicamentos, f, indent=4, ensure_ascii=False)
 
@@ -34,16 +32,14 @@ def adicionar_medicamento(nome, dosagem, horario):
     return novo_med
 
 def listar_medicamentos():
-    """Retorna todos os medicamentos cadastrados."""
     return carregar_medicamentos()
 
 def remover_medicamento(nome):
-    """Remove um medicamento pelo nome. Retorna True se removeu, False se não encontrou."""
     medicamentos = carregar_medicamentos()
     meds_filtrados = [m for m in medicamentos if m["nome"].lower() != nome.lower()]
     
     if len(medicamentos) == len(meds_filtrados):
-        return False  # Nada foi removido
+        return False  
     
     salvar_medicamentos(meds_filtrados)
     return True
