@@ -1,3 +1,10 @@
+## Link Público (Deploy)
+Acesse e rode a aplicação diretamente pelo navegador via Replit:
+https://replit.com/@victorhdantas/med-control
+
+## Integração com API (Entrega Intermediária)
+Esta aplicação consome a API Pública do **ViaCEP** para ajudar o usuário a confirmar a localização de sua residência ou buscar regiões próximas para encontrar farmácias físicas, complementando a gestão dos medicamentos.
+
 # MedControl CLI
 
 [![CI Pipeline](https://github.com/[SEU_USUARIO]/med-control/actions/workflows/ci.yml/badge.svg)](https://github.com/[SEU_USUARIO]/med-control/actions)
