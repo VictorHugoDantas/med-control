@@ -43,6 +43,13 @@ def remover_medicamento(nome):
     
     salvar_medicamentos(meds_filtrados)
     return True
+def salvar_novo_item(nome_item):
+    try:
+        # Envia um dado novo para a tabela do Supabase
+        resposta = supabase.table("itens").insert({"nome": nome_item}).execute()
+        print("Item cadastrado com sucesso!", resposta.data)
+    except Exception as e:
+        print("Erro ao salvar no banco:", e)
 
 from src.supabase_client import supabase
 
