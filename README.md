@@ -27,3 +27,8 @@ Você só precisa ter o Python instalado. Siga estes passos simples:
 ```bash
 git clone [https://github.com/](https://github.com/)[SEU_USUARIO]/med-control.git
 cd med-control
+
+## 👥 Integrantes do Projeto
+* Victor Hugo Dantas
+* Pedro da Silva Andrade
+* Mateus Volkmer Amaral
