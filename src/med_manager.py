@@ -50,3 +50,16 @@ def salvar_novo_item(nome_item):
         print("Item cadastrado com sucesso!", resposta.data)
     except Exception as e:
         print("Erro ao salvar no banco:", e)
+
+from src.supabase_client import supabase
+
+def puxar_dados_do_banco():
+    try:
+        # Busca todos os dados da tabela 'itens'
+        resposta = supabase.table("itens").select("*").execute()
+        print("Dados do Banco:", resposta.data)
+    except Exception as e:
+        print("Erro ao conectar no Supabase:", e)
+
+# Chame a função para testar se aparece no seu terminal
+puxar_dados_do_banco()
