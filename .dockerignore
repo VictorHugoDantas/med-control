@@ -1,0 +1,15 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+node_modules
+__pycache__
+*.pyc
+.venv
+venv
+testes
+docs
+*.md
+medicamentos.json
+package*.json
