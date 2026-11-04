@@ -14,3 +14,11 @@ env/
 
 # Arquivo de dados local (gerado na execução)
 medicamentos.json
+
+# Segredos
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
