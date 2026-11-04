@@ -1,0 +1,55 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        VERSION: ${APP_VERSION:-dev}
+    image: ${IMAGE:-med-control}:${APP_VERSION:-dev}
+    container_name: medcontrol-app
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-medcontrol}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-medcontrol}
+      REDIS_URL: redis://cache:6379/0
+    volumes:
+      - app_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+
+  db:
+    image: postgres:16-alpine
+    container_name: medcontrol-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-medcontrol}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-medcontrol}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  cache:
+    image: redis:7-alpine
+    container_name: medcontrol-cache
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - cache_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  app_data:
+  db_data:
+  cache_data:

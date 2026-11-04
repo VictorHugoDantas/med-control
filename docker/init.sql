@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS itens (
+    id SERIAL PRIMARY KEY,
+    nome TEXT NOT NULL,
+    criado_em TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS medicamentos (
+    id SERIAL PRIMARY KEY,
+    nome TEXT NOT NULL,
+    dosagem TEXT NOT NULL,
+    horario TEXT NOT NULL
+);

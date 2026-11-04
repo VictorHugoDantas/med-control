@@ -1,6 +1,6 @@
 # MedControl CLI
 
-[![CI Pipeline](https://github.com/[SEU_USUARIO]/med-control/actions/workflows/ci.yml/badge.svg)](https://github.com/[SEU_USUARIO]/med-control/actions)
+[![CI/CD Pipeline](https://github.com/VictorHugoDantas/med-control/actions/workflows/ci.yml/badge.svg)](https://github.com/VictorHugoDantas/med-control/actions)
 
 ## Por que o MedControl existe?
 
@@ -25,8 +25,45 @@ Você só precisa ter o Python instalado. Siga estes passos simples:
 
 **1. Baixe o projeto:**
 ```bash
-git clone [https://github.com/](https://github.com/)[SEU_USUARIO]/med-control.git
+git clone https://github.com/VictorHugoDantas/med-control.git
 cd med-control
+```
+
+**2. Configure as variáveis:**
+```bash
+cp .env.example .env
+```
+Preencha o `.env` com as chaves do Supabase e uma senha para o Postgres.
+
+**3. Rode sem Docker:**
+```bash
+pip install -r requirements.txt
+python src/main.py
+```
+
+## Docker
+
+Build da imagem:
+```bash
+docker build --build-arg VERSION=$(cat VERSION) -t med-control:$(cat VERSION) .
+```
+
+Subir a aplicação com Postgres e Redis:
+```bash
+docker compose up -d db cache
+docker compose run --rm app
+```
+
+Os medicamentos ficam salvos no volume `app_data`, então não se perdem ao recriar o container.
+
+Usar a imagem publicada no GHCR:
+```bash
+docker run -it --rm --env-file .env ghcr.io/victorhugodantas/med-control:producao
+```
+
+## CI/CD
+
+Pipeline com testes, publicação da imagem no GHCR, deploy em homologação e produção (simulados) e rollback. Detalhes de secrets, versionamento e da simulação de rollback em [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## 👥 Integrantes do Projeto
 * Victor Hugo Dantas
