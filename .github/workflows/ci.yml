@@ -1,10 +1,14 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*.*.*" ]
   pull_request:
     branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
   build-and-test:
@@ -22,7 +26,7 @@ jobs:
     - name: Instalar dependências
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
 
     - name: Rodar Linting (Ruff)
       run: |
@@ -31,3 +35,175 @@ jobs:
     - name: Rodar Testes (Pytest)
       run: |
         pytest
+
+    - name: Conferir versão da tag com o arquivo VERSION
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        TAG="${GITHUB_REF_NAME#v}"
+        ARQUIVO="$(tr -d '[:space:]' < VERSION)"
+        if [ "$TAG" != "$ARQUIVO" ]; then
+          echo "Tag $TAG diferente do VERSION ($ARQUIVO)"
+          exit 1
+        fi
+
+  publish-image:
+    needs: build-and-test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.vars.outputs.image }}
+      sha_tag: ${{ steps.vars.outputs.sha_tag }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Definir nome da imagem
+      id: vars
+      run: |
+        echo "image=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        echo "sha_tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+    - name: Login no GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Gerar tags (semver)
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ steps.vars.outputs.image }}
+        tags: |
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=sha,prefix=sha-,format=short
+          type=ref,event=branch
+
+    - uses: docker/setup-buildx-action@v3
+
+    - name: Build e push
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        build-args: |
+          VERSION=${{ steps.meta.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy-homologacao:
+    needs: publish-image
+    runs-on: ubuntu-latest
+    environment: homologacao
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Login no GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Deploy (simulado) em homologação
+      env:
+        IMAGE: ${{ needs.publish-image.outputs.image }}:${{ needs.publish-image.outputs.sha_tag }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      run: |
+        docker pull "$IMAGE"
+        bash scripts/smoke_test.sh "$IMAGE"
+
+    - name: Marcar imagem como homologacao
+      run: |
+        docker buildx imagetools create \
+          -t "${{ needs.publish-image.outputs.image }}:homologacao" \
+          "${{ needs.publish-image.outputs.image }}:${{ needs.publish-image.outputs.sha_tag }}"
+
+  deploy-producao:
+    needs: [publish-image, deploy-homologacao]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: producao
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ${{ needs.publish-image.outputs.image }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Login no GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Guardar versão atual de produção
+      id: anterior
+      run: |
+        if docker buildx imagetools inspect "$IMAGE:producao" > /dev/null 2>&1; then
+          docker pull -q "$IMAGE:producao"
+          VERSAO=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$IMAGE:producao")
+          docker buildx imagetools create -t "$IMAGE:producao-anterior" "$IMAGE:producao"
+          echo "existe=true" >> "$GITHUB_OUTPUT"
+          echo "versao=${VERSAO}" >> "$GITHUB_OUTPUT"
+          echo "Produção atual: ${VERSAO}"
+        else
+          echo "existe=false" >> "$GITHUB_OUTPUT"
+          echo "Primeiro deploy em produção"
+        fi
+
+    - name: Promover nova versão para produção
+      run: |
+        docker buildx imagetools create -t "$IMAGE:producao" "$IMAGE:${GITHUB_REF_NAME#v}"
+
+    - name: Smoke test em produção
+      id: smoke
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        SIMULAR_FALHA: ${{ vars.SIMULAR_FALHA }}
+      run: |
+        docker pull "$IMAGE:producao"
+        bash scripts/smoke_test.sh "$IMAGE:producao"
+
+    - name: Rollback automático
+      if: failure() && steps.smoke.outcome == 'failure' && steps.anterior.outputs.existe == 'true'
+      run: |
+        echo "Smoke test falhou, voltando para ${{ steps.anterior.outputs.versao }}"
+        docker buildx imagetools create -t "$IMAGE:producao" "$IMAGE:producao-anterior"
+        echo "### Rollback executado" >> "$GITHUB_STEP_SUMMARY"
+        echo "Versão ${GITHUB_REF_NAME} falhou. Produção voltou para ${{ steps.anterior.outputs.versao }}." >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Resumo do deploy
+      if: success()
+      run: |
+        echo "### Deploy em produção" >> "$GITHUB_STEP_SUMMARY"
+        echo "Versão ${GITHUB_REF_NAME} publicada (anterior: ${{ steps.anterior.outputs.versao || 'nenhuma' }})" >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    needs: deploy-producao
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Criar release no GitHub
+      uses: softprops/action-gh-release@v2
+      with:
+        generate_release_notes: true
